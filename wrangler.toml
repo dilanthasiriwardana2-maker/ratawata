@@ -1,0 +1,11 @@
+name = "summer-grass-0180ratawata-news-api"
+main = "worker.mjs"
+compatibility_date = "2025-11-01"
+
+[triggers]
+crons = ["*/5 * * * *", "*/30 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ratawata-news"
+database_id = "afcfec40-308d-4f51-bd9d-595cdb2d7b71"
