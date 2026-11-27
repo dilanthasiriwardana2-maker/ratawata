@@ -367,6 +367,58 @@ function imageContentType(base64) {
   return "";
 }
 
+const imageCreditTable = `CREATE TABLE IF NOT EXISTS rw_image_credits (
+  article_id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  creator TEXT NOT NULL,
+  license TEXT NOT NULL,
+  license_url TEXT NOT NULL,
+  source_url TEXT NOT NULL,
+  image_url TEXT NOT NULL
+)`;
+const OPENVERSE_TERMS = {
+  local:"Sri Lanka news",
+  politics:"Sri Lanka parliament politics",
+  business:"Sri Lanka economy business",
+  sports:"Sri Lanka cricket sports",
+  gossip:"Sri Lanka entertainment cinema",
+  weather:"Sri Lanka weather monsoon rain",
+  technology:"technology computers",
+  world:"world news international"
+};
+async function openversePhoto(title, category) {
+  const queries = [plain(title).slice(0,120) + " " + (OPENVERSE_TERMS[category] || "Sri Lanka news")];
+  if (OPENVERSE_TERMS[category]) queries.push(OPENVERSE_TERMS[category]);
+  for (const q of queries) {
+    try {
+      const endpoint = new URL("https://api.openverse.org/v1/images/");
+      endpoint.search = new URLSearchParams({
+        q, license_type:"commercial", extension:"jpg", aspect_ratio:"wide",
+        size:"large", page_size:"8", mature:"false"
+      });
+      const response = await fetch(endpoint,{signal:AbortSignal.timeout(4500),
+        headers:{"Accept":"application/json","User-Agent":"RataWataNewsBot/1.1 (+https://ratawata.online/)"}});
+      if (!response.ok) continue;
+      const data = await response.json();
+      for (const result of data.results || []) {
+        const license = String(result.license || "").toLowerCase();
+        if (!["cc0","pdm","by","by-sa","by-nd","by-nc-nd","by-nc-sa","by-nc"].includes(license)) continue;
+        if (license.includes("nc")) continue;
+        const image = publicUrl(result.thumbnail || result.url || "");
+        const licenseUrl = publicUrl(result.license_url || "");
+        const sourceUrl = publicUrl(result.foreign_landing_url || result.detail_url || "");
+        if (!image || !licenseUrl || !sourceUrl) continue;
+        const creator = plain(result.creator || "Unknown creator").slice(0,180);
+        const workTitle = plain(result.title || title).slice(0,180);
+        return {url:image,title:workTitle,creator,license,licenseUrl,sourceUrl};
+      }
+    } catch (error) {
+      console.warn("Openverse image search unavailable",String(error));
+    }
+  }
+  return null;
+}
+
 async function commonsPhoto(subject, facts) {
   if (typeof subject !== "string" || subject.length < 3 || subject.length > 85 ||
       !facts.includes(subject) || !/[අ-ෆ]/u.test(subject)) return null;
@@ -443,6 +495,7 @@ async function ingest(env, feeds) {
     item.titleHash = await sha256(item.title.toLowerCase().trim());
   }
   await env.DB.prepare(editorialTable).run();
+  await env.DB.prepare(imageCreditTable).run();
   const previous = new Map();
   for (let offset=0; offset<candidates.length; offset+=90) {
     const ids = candidates.slice(offset,offset+90).map(item=>item.id);
@@ -472,8 +525,8 @@ async function ingest(env, feeds) {
   // Rotate small batches so the same unavailable articles cannot block the feed.
   const pending = [...new Map(candidates.filter(item=>!previous.get(item.id)?.ready &&
     item.feed.category !== "weather").map(item=>[item.id,item])).values()];
-  const batchSize = 5;
-  const interval = breakingRun ? 5 : 30;
+  const batchSize = breakingRun ? 5 : 2;
+  const interval = breakingRun ? 5 : 120;
   const batchCount = Math.max(1,Math.ceil(pending.length/batchSize));
   const offset = (Math.floor(Date.now()/(interval*60000)) % batchCount) * batchSize;
   const eligibleIds = new Set(pending.slice(offset,offset+batchSize).map(item=>item.id));
@@ -518,8 +571,18 @@ async function ingest(env, feeds) {
       image = publicUrl(item.imageUrl || metadata?.image || "",item.articleUrl);
       stats.prepared++;
     }
+    let openverseCredit = null;
+    if (!image && !officialAlert) {
+      openverseCredit = await openversePhoto(headline,category);
+      if (openverseCredit) image = openverseCredit.url;
+    }
     known.push({id:item.id,link,headline:titleKey});
     const tags = JSON.stringify(buildTags(headline,description,category));
+    if (openverseCredit) statements.push(env.DB.prepare(
+      "INSERT INTO rw_image_credits(article_id,title,creator,license,license_url,source_url,image_url) VALUES(?,?,?,?,?,?,?) " +
+      "ON CONFLICT(article_id) DO UPDATE SET title=excluded.title,creator=excluded.creator,license=excluded.license," +
+      "license_url=excluded.license_url,source_url=excluded.source_url,image_url=excluded.image_url"
+    ).bind(item.id,openverseCredit.title,openverseCredit.creator,openverseCredit.license,openverseCredit.licenseUrl,openverseCredit.sourceUrl,openverseCredit.url));
     statements.push(env.DB.prepare(
       "INSERT INTO articles (id,title_hash,title,description,category,source,source_url,article_url,published_at,is_breaking,created_at,image_url,tags) " +
       "SELECT ?,?,?,?,?,?,?,?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM articles WHERE (title_hash = ? OR article_url = ?) AND id <> ?) " +
@@ -590,6 +653,16 @@ async function getNews(env, url) {
   const localized = new Map();
   const photoEditions = new Set();
   const credits = new Map();
+  const imageCredits = new Map();
+  await env.DB.prepare(imageCreditTable).run();
+  if (rows.length) {
+    for (let offset=0; offset<rows.length; offset+=90) {
+      const ids = rows.slice(offset,offset+90).map(row=>row.id);
+      const bundle = await env.DB.prepare("SELECT article_id,title,creator,license,license_url,source_url,image_url FROM rw_image_credits WHERE article_id IN ("+
+        ids.map(()=>"?").join(",")+")").bind(...ids).all();
+      for (const row of bundle.results || []) imageCredits.set(row.article_id,row);
+    }
+  }
   if (newsLanguages.includes(lang) && rows.length) {
     for (let offset=0; offset<rows.length; offset+=90) {
       const ids = rows.slice(offset,offset+90).map(row=>row.id);
@@ -614,6 +687,7 @@ async function getNews(env, url) {
     const candidate = publicUrl(item.image_url || "");
     const generated = candidate === generatedOrigin + "/api/image/" + item.id;
     const credit=credits.get(item.id);
+    const openverse = imageCredits.get(item.id);
     const archive = candidate && credit?.url===candidate && isHost(candidate,"upload.wikimedia.org");
     const fallbackIndex = parseInt(item.id.slice(0,8),16) % 10;
     const fallback = generatedOrigin + "/api/fallback/" + fallbackIndex + ".svg";
@@ -635,9 +709,10 @@ async function getNews(env, url) {
       published_at: item.published_at,
       breaking: Boolean(item.is_breaking),
       image,
-      image_license:archive ? credit.terms : null,
-      image_source:archive ? credit.file : null,
+      image_license:archive ? credit.terms : openverse?.license_url || null,
+      image_source:archive ? credit.file : openverse?.source_url || null,
       image_label:
+        openverse && openverse.image_url === image ? `නිදහස් ඡායාරූපය · ${openverse.creator} · ${openverse.license.toUpperCase()}` :
         archive ? "සංරක්ෂිත ඡායාරූපය · "+credit.credit : generated ? "AI නිර්මාණය කළ සංකේතාත්මක දසුන" : image !== SITE_LOGO
           ? isHost(image,"lankacnews.com") ? "Lanka C News" : "පුවත් මූලාශ්‍රයේ පින්තූරය"
           : candidate && candidate !== SITE_LOGO ? "පුවත් මූලාශ්‍රයේ පින්තූරය" : "RataWata සංකේතාත්මක රූපය",
@@ -655,7 +730,7 @@ async function getNews(env, url) {
 export default {
   async scheduled(event, env, ctx) {
     if (event.cron === "*/5 * * * *") ctx.waitUntil(ingest(env, FEEDS.breaking));
-    if (event.cron === "*/30 * * * *") ctx.waitUntil(ingest(env, FEEDS.normal));
+    if (event.cron === "0 */2 * * *") ctx.waitUntil(ingest(env, FEEDS.normal));
   },
   async fetch(request, env) {
     const url = new URL(request.url);
