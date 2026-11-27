@@ -1,5 +1,34 @@
 const parliamentPhoto = "https://upload.wikimedia.org/wikipedia/commons/5/5f/New_Sri_Lankan_Parliament_in_Kotte.jpg";
 const SITE_LOGO = "https://ratawata.online/assets/ratawata.webp";
+const EDITORIAL_PROMPT_VERSION = "ratawata-si-v1";
+const EDITORIAL_PROMPT = `ඔබ RataWata වෙබ් අඩවියේ ප්‍රධාන සිංහල පුවත් සංස්කාරකවරයාය.
+
+පුවත් සකස් කිරීම:
+1. BBC Sinhala, Ada Derana, Hiru සහ විශ්වාසදායක නිල මූලාශ්‍රවල අලුත් පුවත් භාවිත කරන්න.
+2. සත්‍ය තොරතුරු පමණක් භාවිත කරන්න. නොදන්නා තොරතුරු හෝ සංඛ්‍යා කිසිවිටෙක නිර්මාණය නොකරන්න.
+3. මුල් පුවත වචනයෙන් වචනය පිටපත් නොකර, නිවැරදි අර්ථය රැකගෙන ස්වභාවික සිංහලෙන් නැවත ලියන්න.
+4. කෙටි, පැහැදිලි සහ ආකර්ෂණීය සිරස්තලයක් යොදන්න.
+5. වැදගත් කරුණු, දිනය, ස්ථානය සහ අදාළ පුද්ගලයන් පැහැදිලි කරන්න.
+6. තහවුරු නොකළ කටකතා හෝ නොමඟ යවන සිරස්තල පළ නොකරන්න.
+7. මුල් පුවත් මූලාශ්‍රයේ සබැඳිය සුරකින්න.
+
+ප්‍රධාන රූපය:
+1. පුවතටම අදාළ, භාවිතයට අවසර ඇති රූපයක් පමණක් තෝරන්න.
+2. CC0 හෝ Public Domain රූප පමණක් ස්වයංක්‍රීයව භාවිත කරන්න.
+3. රූපය පුවතට ගැළපෙන බව තහවුරු නොවුණොත් එය භාවිත නොකරන්න.
+4. වෙනත් පුවතක ඡායාරූපයක් අහඹුවෙන් භාවිත නොකරන්න.
+5. රූපයක් නොමැති විට RataWata fallback රූපයක් භාවිත කරන්න.
+6. රූපයේ මූලාශ්‍රය සහ බලපත්‍ර තොරතුරු සුරකින්න.
+
+Publish කිරීම:
+- වෙබ් අඩවිය: https://ratawata.online
+- භාෂාව: සිංහල
+- රූප අනුපාතය: 16:9
+- රූප ප්‍රමාණය: කුඩා සහ වේගයෙන් load වන ලෙස
+- SEO tags සහ category එක් කරන්න.
+- එකම පුවත නැවත පළ නොකරන්න.
+- පුවත සත්‍ය බව තහවුරු කළ නොහැකි නම් publish නොකරන්න.`;
+
 const FEEDS = {
   normal: [
     {id:"bbc-sinhala",name:"BBC Sinhala",website:"https://www.bbc.com/sinhala",url:"https://www.bbc.com/sinhala",category:"local"},
@@ -753,14 +782,17 @@ export default {
         return json({
           ok: true,
           service: "RataWata News API",
-          release: "rss-auto-1",
+          release: "rss-auto-2",
+          editorPromptVersion: EDITORIAL_PROMPT_VERSION,
+          editorPromptConfigured: Boolean(EDITORIAL_PROMPT),
+          aiRewriteEnabled: Boolean(env.AI),
           databaseBinding: "DB",
           reportGeneration: false,
           logo: SITE_LOGO,
           trends: TRENDS_URL,
           schedules: [
             "*/5 * * * *",
-            "*/30 * * * *"
+            "0 */2 * * *"
           ],
           feeds: [
             ...FEEDS.normal.map(feed => ({
