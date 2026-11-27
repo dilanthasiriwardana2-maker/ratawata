@@ -568,7 +568,7 @@ async function ingest(env, feeds) {
       const facts = [item.feedText,metadata?.articleText,item.description,...(metadata?.descriptions || [])]
         .filter(Boolean).reduce((best,text) => wordCount(text) > wordCount(best) ? text : best,"");
       description = summary(facts,item.title) || item.description || "";
-      image = publicUrl(item.imageUrl || metadata?.image || "",item.articleUrl);
+      image = imageAllowed(env,item.feed.id) ? publicUrl(item.imageUrl || metadata?.image || "",item.articleUrl) : "";
       stats.prepared++;
     }
     let openverseCredit = null;
