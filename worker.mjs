@@ -402,8 +402,7 @@ async function openversePhoto(title, category) {
       const data = await response.json();
       for (const result of data.results || []) {
         const license = String(result.license || "").toLowerCase();
-        if (!["cc0","pdm","by","by-sa","by-nd","by-nc-nd","by-nc-sa","by-nc"].includes(license)) continue;
-        if (license.includes("nc")) continue;
+        if (!["cc0","pdm"].includes(license)) continue;
         const image = publicUrl(result.thumbnail || result.url || "");
         const licenseUrl = publicUrl(result.license_url || "");
         const sourceUrl = publicUrl(result.foreign_landing_url || result.detail_url || "");
