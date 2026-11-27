@@ -500,7 +500,7 @@ async function ingest(env, feeds) {
     }
     let description = item.description || "";
     let headline = item.title;
-    let image = SITE_LOGO;
+    let image = "";
     let category = classify(item.title,description,item.hints,item.feed.category);
     if (!officialAlert) {
       const metadata = (!item.imageUrl || !item.publishedAt || wordCount(item.feedText || "") < 120)
@@ -515,7 +515,7 @@ async function ingest(env, feeds) {
       const facts = [item.feedText,metadata?.articleText,item.description,...(metadata?.descriptions || [])]
         .filter(Boolean).reduce((best,text) => wordCount(text) > wordCount(best) ? text : best,"");
       description = summary(facts,item.title) || item.description || "";
-      image = publicUrl(item.imageUrl || metadata?.image || "",item.articleUrl) || SITE_LOGO;
+      image = publicUrl(item.imageUrl || metadata?.image || "",item.articleUrl);
       stats.prepared++;
     }
     known.push({id:item.id,link,headline:titleKey});
@@ -615,8 +615,10 @@ async function getNews(env, url) {
     const generated = candidate === generatedOrigin + "/api/image/" + item.id;
     const credit=credits.get(item.id);
     const archive = candidate && credit?.url===candidate && isHost(candidate,"upload.wikimedia.org");
+    const fallbackIndex = parseInt(item.id.slice(0,8),16) % 10;
+    const fallback = generatedOrigin + "/api/fallback/" + fallbackIndex + ".svg";
     const image = archive || candidate === parliamentPhoto ? candidate : generated ? candidate :
-      candidate && candidate !== SITE_LOGO ? candidate : SITE_LOGO;
+      candidate && candidate !== SITE_LOGO ? candidate : fallback;
     return {
       id: item.id,
       title: localized.get(item.id)?.title || item.title,
@@ -638,7 +640,7 @@ async function getNews(env, url) {
       image_label:
         archive ? "සංරක්ෂිත ඡායාරූපය · "+credit.credit : generated ? "AI නිර්මාණය කළ සංකේතාත්මක දසුන" : image !== SITE_LOGO
           ? isHost(image,"lankacnews.com") ? "Lanka C News" : "පුවත් මූලාශ්‍රයේ පින්තූරය"
-          : "RataWata ලාංඡනය",
+          : candidate && candidate !== SITE_LOGO ? "පුවත් මූලාශ්‍රයේ පින්තූරය" : "RataWata සංකේතාත්මක රූපය",
       logo: SITE_LOGO,
       tags
     };
@@ -706,6 +708,14 @@ export default {
             }))
           ]
         });
+      }
+      const fallbackMatch = /^\/api\/fallback\/(\d)\.svg$/.exec(path);
+      if (fallbackMatch) {
+        const index = Number(fallbackMatch[1]);
+        const palettes = [["#123b63","#2a8c9d"],["#542b62","#b15c87"],["#22543d","#68a879"],["#713f12","#d69a42"],["#263b72","#718bd5"],["#7f2938","#d66d78"],["#164e63","#38a6b8"],["#4a3b78","#a28bd4"],["#3f4b35","#a2b66c"],["#654321","#c18a55"]];
+        const [a,b] = palettes[index];
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="960" height="540" fill="url(#g)"/><circle cx="${180+index*53}" cy="${145+index*17}" r="${210+index*5}" fill="#fff" opacity=".08"/><circle cx="${760-index*21}" cy="450" r="250" fill="#fff" opacity=".07"/><path d="M0 410 Q240 330 480 420 T960 390 V540 H0Z" fill="#071827" opacity=".22"/><g fill="none" stroke="#fff" stroke-width="12" opacity=".78"><rect x="350" y="150" width="260" height="205" rx="18"/><path d="M390 205h180M390 250h180M390 295h120"/></g><text x="480" y="455" fill="#fff" font-family="Arial,sans-serif" font-size="30" font-weight="700" text-anchor="middle" letter-spacing="5">RATAWATA NEWS</text></svg>`;
+        return new Response(svg,{headers:{"Content-Type":"image/svg+xml; charset=utf-8","Cache-Control":"public, max-age=31536000, immutable","X-Content-Type-Options":"nosniff"}});
       }
       const imageId = /^\/api\/image\/([a-f0-9]{64})$/.exec(path)?.[1];
       if (imageId) {
