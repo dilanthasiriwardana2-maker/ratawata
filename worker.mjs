@@ -462,7 +462,7 @@ async function ingest(env, feeds) {
   const sriLankaNow = new Date(Date.now() + 330 * 60 * 1000);
   sriLankaNow.setUTCHours(0,0,0,0);
   const dayStart = new Date(sriLankaNow.getTime() - 330 * 60 * 1000).toISOString();
-  const todayRow = await env.DB.prepare("SELECT COUNT(*) AS total FROM articles WHERE created_at >= ?")
+  const todayRow = await env.DB.prepare("SELECT COUNT(*) AS total FROM articles WHERE (CASE WHEN created_at > 100000000000 THEN CAST(created_at / 1000 AS INTEGER) ELSE created_at END) >= ?")
     .bind(Math.floor(Date.parse(dayStart) / 1000)).first();
   let postedToday = Number(todayRow?.total || 0);
   const statements = [];
