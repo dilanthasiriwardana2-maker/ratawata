@@ -727,7 +727,9 @@ export default {
         });
       }
       if (path === "/api/news") {
-        return json(await getNews(env, url));
+        const response = json(await getNews(env, url));
+        response.headers.set("Cache-Control","public, max-age=30, stale-while-revalidate=120");
+        return response;
       }
       if (path === "/api/trends") {
         return json({
