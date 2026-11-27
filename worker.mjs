@@ -3,7 +3,7 @@ const SITE_LOGO = "https://ratawata.online/assets/ratawata.webp";
 const FEEDS = {
   normal: [
     {id:"adaderana",name:"Ada Derana",website:"https://sinhala.adaderana.lk/",url:"https://sinhala.adaderana.lk/rss.php",category:"local"},
-    {id:"hiru",name:"හිරු පුවත්",website:"https://www.hirunews.lk/",url:"https://www.hirunews.lk/",category:"local"}
+    {id:"hiru",name:"හිරු පුවත්",website:"https://www.hirunews.lk/",url:"https://www.hirunews.lk/",category:"local"},
     {id:"bbc-sinhala",name:"BBC Sinhala",website:"https://www.bbc.com/sinhala",url:"https://www.bbc.com/sinhala",category:"local"},
   ],
   breaking: [
